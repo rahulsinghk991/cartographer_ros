@@ -76,6 +76,7 @@ DrawableSubmap::DrawableSubmap(const int trajectory_id, const int submap_index,
   material_->setCullingMode(Ogre::CULL_NONE);
   material_->setDepthBias(-1.f, 0.f);
   material_->setDepthWriteEnabled(false);
+  response_.submap_version = -1;
   // DrawableSubmap creates and manages its visibility property object
   // (a unique_ptr is needed because the Qt parent of the visibility
   // property is the submap_category object - the BoolProperty needs
@@ -134,17 +135,36 @@ void DrawableSubmap::Update(
 }
 
 bool DrawableSubmap::MaybeFetchTexture(ros::ServiceClient* const client) {
-  ::cartographer::common::MutexLocker locker(&mutex_);
-  // Received metadata version can also be lower - if we restarted Cartographer
-  const bool newer_version_available = texture_version_ != metadata_version_;
+  int response_submap_version;
+  int metadata_version;
   const std::chrono::milliseconds now =
       std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::system_clock::now().time_since_epoch());
-  const bool recently_queried =
-      last_query_timestamp_ + kMinQueryDelayInMs > now;
-  if (!newer_version_available || recently_queried || query_in_progress_) {
-    return false;
+  {
+    ::cartographer::common::MutexLocker locker(&mutex_);
+    // Received metadata version can also be lower if we restarted Cartographer
+    const bool newer_version_available = texture_version_ != metadata_version_;
+    const bool recently_queried =
+        last_query_timestamp_ + kMinQueryDelayInMs > now;
+    if (!newer_version_available || recently_queried || query_in_progress_) {
+      return false;
+    }
+    // Make a copy before releasing the mutex
+    response_submap_version = response_.submap_version;
+    metadata_version = metadata_version_;
   }
+  if (response_submap_version != -1 &&
+      response_submap_version == metadata_version) {
+    // No need to fetch, only render if visible
+    if (visibility()) {
+      // We can not have a mutex locked here
+      UpdateSceneNode();
+      return true;
+    } else {
+      return false;
+    }
+  }
+  ::cartographer::common::MutexLocker locker(&mutex_);
   query_in_progress_ = true;
   last_query_timestamp_ = now;
   rpc_request_future_ = std::async(std::launch::async, [this, client]() {
@@ -156,7 +176,11 @@ bool DrawableSubmap::MaybeFetchTexture(ros::ServiceClient* const client) {
       // 'response_' member to simplify the signal-slot connection slightly.
       ::cartographer::common::MutexLocker locker(&mutex_);
       response_ = srv.response;
-      Q_EMIT RequestSucceeded();
+      if (visibility()) {
+        Q_EMIT RequestSucceeded();
+      } else {
+        query_in_progress_ = false;
+      }
     } else {
       ::cartographer::common::MutexLocker locker(&mutex_);
       query_in_progress_ = false;
