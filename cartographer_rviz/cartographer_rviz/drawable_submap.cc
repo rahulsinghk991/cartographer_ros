@@ -135,37 +135,30 @@ void DrawableSubmap::Update(
 }
 
 bool DrawableSubmap::MaybeFetchTexture(ros::ServiceClient* const client) {
-  int response_submap_version;
-  int metadata_version;
+  ::cartographer::common::MutexLocker locker(&mutex_);
+  // Received metadata version can also be lower - if we restarted Cartographer
+  const bool newer_version_available = texture_version_ != metadata_version_;
   const std::chrono::milliseconds now =
       std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::system_clock::now().time_since_epoch());
-  {
-    ::cartographer::common::MutexLocker locker(&mutex_);
-    // Received metadata version can also be lower if we restarted Cartographer
-    const bool newer_version_available = texture_version_ != metadata_version_;
-    const bool recently_queried =
-        last_query_timestamp_ + kMinQueryDelayInMs > now;
-    if (!newer_version_available || recently_queried || query_in_progress_) {
-      return false;
-    }
-    // Make a copy before releasing the mutex
-    response_submap_version = response_.submap_version;
-    metadata_version = metadata_version_;
+  const bool recently_queried =
+      last_query_timestamp_ + kMinQueryDelayInMs > now;
+  if (!newer_version_available || recently_queried || query_in_progress_) {
+    return false;
   }
-  if (response_submap_version != -1 &&
-      response_submap_version == metadata_version) {
+  query_in_progress_ = true;
+  if (response_.submap_version != -1 &&
+      response_.submap_version == metadata_version_) {
     // No need to fetch, only render if visible
     if (visibility()) {
-      // We can not have a mutex locked here
-      UpdateSceneNode();
+      rpc_request_future_ = std::async(std::launch::async,
+                                       [this]() { Q_EMIT RequestSucceeded(); });
       return true;
     } else {
+      query_in_progress_ = false;
       return false;
     }
   }
-  ::cartographer::common::MutexLocker locker(&mutex_);
-  query_in_progress_ = true;
   last_query_timestamp_ = now;
   rpc_request_future_ = std::async(std::launch::async, [this, client]() {
     ::cartographer_ros_msgs::SubmapQuery srv;
