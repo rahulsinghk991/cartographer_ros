@@ -80,6 +80,7 @@ class DrawableSubmap : public QObject {
  Q_SIGNALS:
   // RPC request succeeded.
   void RequestSucceeded();
+  void VisibilityToggled(DrawableSubmap*);
 
  private Q_SLOTS:
   // Callback when an rpc request succeeded.

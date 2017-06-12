@@ -50,9 +50,12 @@ class SubmapsDisplay
  private Q_SLOTS:
   void Reset();
   void AllEnabledToggled();
+  void VisibilityToggled(DrawableSubmap*);
 
  private:
   void CreateClient();
+  void ConnectVisibilityToggle(const DrawableSubmap* const submap);
+  void DisconnectVisibilityToggle(const DrawableSubmap* const submap);
 
   // These are called by RViz and therefore do not adhere to the style guide.
   void onInitialize() override;

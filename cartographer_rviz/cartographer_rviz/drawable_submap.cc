@@ -125,7 +125,8 @@ void DrawableSubmap::Update(
   visibility_->setName(
       QString("%1.%2").arg(submap_index_).arg(metadata_version_));
   visibility_->setDescription(
-      QString("Toggle visibility of this individual submap.<br><br>"
+      QString("Toggle visibility of this individual submap. Hold Ctrl to "
+              "also toggle two neighbouring submaps.<br><br>"
               "Trajectory %1, submap %2, submap version %3")
           .arg(trajectory_id_)
           .arg(submap_index_)
@@ -275,6 +276,7 @@ void DrawableSubmap::ToggleVisibility() {
       scene_node_->detachObject(manual_object_);
     }
   }
+  Q_EMIT VisibilityToggled(this);
 }
 
 }  // namespace cartographer_rviz
