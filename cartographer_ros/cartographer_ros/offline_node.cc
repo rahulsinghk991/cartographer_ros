@@ -62,8 +62,8 @@ DEFINE_bool(publish_all_bag_messages, false,
             "Publish all messages from bags as they are being processed. "
             "Transforms are controlled separately by 'use_bag_transforms'.");
 DEFINE_double(skip, 0,
-              "How many seconds to skip from the beginning "
-              "(i.e. when the earliest bag starts.) ");
+              "Optional amount of seconds to skip from the beginning "
+              "(i.e. when the earliest bag starts.). ");
 
 namespace cartographer_ros {
 
